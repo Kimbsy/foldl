@@ -5,6 +5,7 @@
             [clunk.palette :as p]
             [clunk.shape :as shape]
             [clunk.sprite :as sprite]
+            [clunk.tween :as tween]
             [clunk.util :as u]
             [foldl.sprites.origami :as origami]))
 
@@ -119,7 +120,8 @@
   "Called each frame, update the sprites in the current scene"
   [state]
   (-> state
-      sprite/update-state))
+      sprite/update-state
+      tween/update-state))
 
 (defn fold-paper
   [{:keys [points colour layer] :as paper} [f-start f-end :as fold-line]]
@@ -218,8 +220,15 @@
 (defn handle-key
   [{:keys [current-scene] :as state} e]
   (if (i/is e :key i/K_ESCAPE)
-    ;; reinitialise sprites
-    (assoc-in state [:scenes current-scene :sprites] (sprites state))
+    (let [{:keys [draw-line?]} (get-in state [:scenes current-scene])]
+      (if draw-line?
+        ;; undo line
+        (-> state
+            (assoc-in [:scenes current-scene :draw-line?] false)
+            (assoc-in [:scenes current-scene :l-start] nil)
+            (assoc-in [:scenes current-scene :l-end] nil))
+        ;; reinitialise sprites
+        (assoc-in state [:scenes current-scene :sprites] (sprites state))))
     state))
 
 (defn init

@@ -15,14 +15,12 @@
 
 (defn draw-origami!
   [state {:keys [papers]}]
+  ;; @TODO: We've switched to memoized triangulation in clunk, but we
+  ;; could also write a fill-polys! which allows us to specify
+  ;; multiple colours.
   (doseq [{:keys [points colour] :as paper} (sort-by :layer papers)]
     ;; draw the paper
-    (shape/fill-poly! state [0 0] points colour)
-    ;; draw the points
-    (doseq [p points]
-      (let [size 10
-            offset [(/ size 2) (/ size 2)]]
-        (shape/draw-ellipse! state (mapv - p offset) [size size] p/black)))))
+    (shape/fill-poly! state [0 0] points colour)))
 
 (defn origami
   [papers]

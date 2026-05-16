@@ -5,20 +5,25 @@
             [clunk.sprite :as sprite]
             [clunk.util :as u]
             [clunk.shape :as shape]
-            [clunk.collision :as collision]))
+            [clunk.collision :as collision]
+            [foldl.sprites.origami :as origami]))
 
 (def coral-pink (p/hex->rgba "#FF9B85"))
 
-(def initial-paper
-  [[200 250]
-   [200 350]
-   [600 350]
-   [600 250]])
+(defn initial-paper
+  []
+  (origami/origami
+   [(origami/paper
+     [[200 250]
+      [200 350]
+      [600 350]
+      [600 250]]
+     :colour p/white)]))
 
 (defn sprites
   "The initial list of sprites for this scene"
   [{:keys [window] :as state}]
-  [])
+  [(initial-paper)])
 
 (defn line-intersection-point
   "Make sure the lines intersect using `collision/lines-intersect?`
@@ -85,47 +90,43 @@
         fold-end (mapv + l-start big-ul)]
     [fold-start fold-end]))
 
-;; @TODO: massively reduce what we're drawing every frame
 (defn draw-level-01!
   "Called each frame, draws the current scene to the screen"
   [{:keys [current-scene] :as state}]
   (c/draw-background! coral-pink)
-  (let [{:keys [draw-line? l-start l-end papers]} (get-in state [:scenes current-scene])
-        l-end (or l-end (i/mouse-pos state))]
-    (doseq [[i paper] (map vector (range) papers)]
-      ;; draw the paper
-      (shape/fill-poly! state [0 0] paper (nth (iterate p/darken p/white) i))
-      ;; draw the points
-      (doseq [p paper]
-        (let [size 10
-              offset [(/ size 2) (/ size 2)]]
-          (shape/draw-ellipse! state (mapv - p offset) [size size] p/black)))
-      (when draw-line?
-        ;; draw actual line
-        (shape/draw-line! state l-start l-end p/cyan :line-width 4)
-        ;; calculate fold line
-        (let [[fold-start fold-end :as fold-line] (project-fold-line state l-start l-end)]
-          ;; draw fold line
-          (when (seq (last fold-line))
-            (shape/draw-line! state fold-start l-start p/red)
-            (shape/draw-line! state l-end fold-end p/red)
+  (sprite/draw-scene-sprites! state)
+  (let [{:keys [draw-line? l-start l-end] :as scene} (get-in state [:scenes current-scene])
+        l-end (or l-end (i/mouse-pos state))
+        origamis (filter (sprite/has-group :origami) (:sprites scene))]
 
-            ;; tmp show reflections in the fold-line
-            (shape/fill-ellipse! state (i/mouse-pos state) [10 10] p/magenta)
-            (shape/fill-ellipse! state (reflect (i/mouse-pos state)
-                                                fold-line)
-                                 [10 10] p/yellow)
+    ;; @TODO: fold line should be it's own sprite probably, don't love the global state in the scene, but maybe it's fine
+    
+    (when draw-line?
+      ;; draw actual line
+      (shape/draw-line! state l-start l-end p/cyan :line-width 4)
+      ;; calculate fold line
+      (let [[fold-start fold-end :as fold-line] (project-fold-line state l-start l-end)]
+        ;; draw fold line
+        (when (seq (last fold-line))
+          (shape/draw-line! state fold-start l-start p/red)
+          (shape/draw-line! state l-end fold-end p/red)
 
-            )
-          ;; highlight paper edge intersections
-          (doseq [[a b :as line] (u/poly-lines paper)]
-            (when (collision/lines-intersect? line fold-line)
-              (shape/draw-line! state a b p/green :line-width 3)
-              ;; show intersection points
-              (let [p (line-intersection-point line fold-line)
-                    size 10
-                    offset [(/ size 2) (/ size 2)]]
-                (shape/draw-ellipse! state (mapv - p offset) [size size] p/black)))))))))
+          ;; tmp show reflections in the fold-line
+          (shape/fill-ellipse! state (i/mouse-pos state) [10 10] p/magenta)
+          (shape/fill-ellipse! state (reflect (i/mouse-pos state)
+                                              fold-line)
+                               [10 10] p/yellow))
+        
+        ;; highlight paper edge intersections
+        (doseq [paper (mapcat :papers origamis)
+                [a b :as line] (u/poly-lines (:points paper))]
+          (when (collision/lines-intersect? line fold-line)
+            (shape/draw-line! state a b p/green :line-width 3)
+            ;; show intersection points
+            (let [p (line-intersection-point line fold-line)
+                  size 10
+                  offset [(/ size 2) (/ size 2)]]
+              (shape/draw-ellipse! state (mapv - p offset) [size size] p/black))))))))
 
 (defn update-level-01
   "Called each frame, update the sprites in the current scene"
@@ -133,6 +134,7 @@
   (-> state
       sprite/update-state))
 
+;; @TODO: update to use origami sprites instead of scene `:papers`
 (defn fold-paper
   [paper [f-start f-end :as fold-line]]
   (let [;; @TODO: tween the change, for now snapping to it is fine
@@ -168,6 +170,7 @@
         {:new-shapes new-shapes
          :i-points i-points}))))
 
+;; @TODO: update to use origami sprites instead of scene `:papers`
 (defn fold-all-papers
   [{:keys [current-scene] :as state}]
   (let [{:keys [l-start l-end papers]} (get-in state [:scenes current-scene])
@@ -211,7 +214,8 @@
 (defn handle-key
   [{:keys [current-scene] :as state} e]
   (if (i/is e :key i/K_ESCAPE)
-    (assoc-in state [:scenes current-scene :papers] [initial-paper])
+    ;; reinitialise sprites
+    (assoc-in state [:scenes current-scene :sprites] (sprites state))
     state))
 
 (defn init
@@ -224,6 +228,4 @@
    :key-fns [handle-key]
    :draw-line? false
    :l-start nil
-   :l-end nil
-   :papers [;; start with 1
-            initial-paper]})
+   :l-end nil})

@@ -1,8 +1,8 @@
 (ns foldl.sprites.origami
   "An Origami is a collection of pieces of paper which fold together."
-  (:require [clunk.sprite :as sprite]
-            [clunk.palette :as p]
-            [clunk.shape :as shape]))
+  (:require [clunk.palette :as p]
+            [clunk.shape :as shape]
+            [clunk.sprite :as sprite]))
 
 (defn paper
   [points &
